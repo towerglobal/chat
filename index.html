@@ -256,7 +256,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 <script>
 const chatBox = document.getElementById("chat");
 const scrollToBottomBtn = document.getElementById("scrollToBottom");
-const socket = new WebSocket("ws://chat.towerunite.com/global");
+const socket = new WebSocket("wss://chat.towerunite.com/global");
 const avatarCache = {};
 const fallbackAvatar = "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/b5/b5bd56c1aa4644a474a2e4972be27ef9e82e517e_full.jpg";
 let blockedUsers = [];
