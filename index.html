@@ -1,1 +1,1014 @@
-Initial
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Global Chat — Context Popup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+:root{
+--background-color:#121212;
+--surface-color:#1e1e1e;
+--primary-text:#e0e0e0;
+--secondary-text:#a0a0a0;
+--accent-color:#03a9f4;
+--border-color:#2c2c2c;
+--danger:#f44336;
+--warn:#ff9800;
+--success:#4caf50;
+--font-family:'Poppins',sans-serif;
+}
+
+html,body { height:100%; margin:0; font-family:var(--font-family); background:var(--background-color); color:var(--primary-text); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+.container { display:flex; flex-direction:column; height:100vh; position:relative; }
+
+#chat { flex:1; overflow-y:auto; padding:20px; scroll-behavior:smooth; }
+#chat::-webkit-scrollbar{ width:8px; } #chat::-webkit-scrollbar-thumb{ background:#444; border-radius:4px; }
+
+.msg{ display:flex; align-items:flex-start; gap:16px; margin:16px 0; position:relative; padding-right:8px; opacity:0; transform:translateY(10px); transition:opacity .4s ease, transform .4s ease; cursor:pointer; }
+.msg.visible{ opacity:1; transform:translateY(0); }
+.msg.no-animate { opacity: 1; transform: translateY(0); transition: none; }
+
+.avatar{ width:50px; height:50px; border-radius:50%; object-fit:cover; border:2px solid var(--border-color); }
+
+.content{ background:var(--surface-color); padding:10px 16px; border-radius:16px; border:1px solid var(--border-color); flex-grow:1; z-index:1; transition: box-shadow .22s, transform .22s, border-color .3s ease; }
+.name-line{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.name{ color:var(--accent-color); font-weight:600; font-size:1.1em; text-decoration:none; }
+.name.followed-user-name { color: var(--success); }
+.loc{ color:var(--secondary-text); font-size:.85em; margin-left:8px; }
+.timestamp{ color:var(--secondary-text); font-size:.8em; white-space:nowrap; }
+
+.message-text{ line-height:1.5; word-break:break-word; }
+
+.actions{ display:flex; gap:8px; position:absolute; right:12px; top:50%; transform:translateY(-50%); opacity:0; pointer-events:none; z-index:2; align-items:center; }
+.action-btn{ cursor:pointer; color:var(--secondary-text); font-size:22px; padding:6px; border-radius:8px; background:rgba(255,255,255,0.02); }
+.action-btn:hover{ transform:scale(1.15); }
+
+.context-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.4); opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:999; }
+.context-backdrop.open{ opacity:1; pointer-events:auto; }
+
+.context-sheet{
+position:fixed;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%) scale(0.975);
+width:90%;
+max-width:560px;
+border-radius:12px;
+background:var(--surface-color);
+box-shadow:0 12px 36px rgba(0,0,0,0.55);
+padding:20px;
+color:var(--primary-text);
+z-index:1000;
+opacity:0;
+transition:opacity .18s ease, transform .18s cubic-bezier(.2,.9,.2,1);
+pointer-events: none;
+}
+.context-sheet.open{
+opacity:1;
+transform:translate(-50%,-50%) scale(1);
+pointer-events: auto;
+}
+.sheet-top{ display:flex; gap:12px; align-items:center; padding-bottom:8px; margin-bottom:12px; }
+.sheet-avatar{ width:56px; height:56px; border-radius:12px; object-fit:cover; border:1px solid rgba(255,255,255,0.06); }
+.sheet-meta{ display:flex; flex-direction:column; }
+.sheet-name{ color:var(--accent-color); font-weight:700; font-size:1.05rem; }
+.sheet-loc{ color:var(--secondary-text); font-size:.85rem; margin-top:2px; }
+
+.sheet-message{
+background:transparent;
+padding:10px 14px;
+border-radius:12px;
+border:1px solid var(--border-color);
+margin-bottom:12px;
+font-size:0.98rem;
+white-space:pre-wrap;
+max-height:36vh;
+overflow:auto;
+color:var(--primary-text);
+backdrop-filter:none;
+text-align:left;
+}
+
+.sheet-actions{ display:flex; flex-direction:column; gap:8px; }
+.sheet-action-btn{
+width:100%;
+padding:12px;
+border-radius:10px;
+font-weight:700;
+font-size:1rem;
+border:none;
+cursor:pointer;
+background: rgba(255,255,255,0.03);
+color:var(--primary-text);
+font-family:var(--font-family);
+letter-spacing:0.2px;
+text-transform:none;
+transition:transform .12s ease, box-shadow .12s ease, background .12s;
+}
+.sheet-action-btn:hover{ transform:translateY(-1px); }
+.sheet-action-btn.destructive{ color:var(--danger); background: rgba(244,67,54,0.07); box-shadow: inset 0 -1px 0 rgba(0,0,0,0.12); }
+.sheet-action-btn.warn{ color:var(--warn); background: rgba(255,152,0,0.07); box-shadow: inset 0 -1px 0 rgba(0,0,0,0.12); }
+.sheet-action-btn.success{ color:var(--success); background: rgba(76,175,80,0.07); box-shadow: inset 0 -1px 0 rgba(0,0,0,0.12); }
+.sheet-action-btn:active{ transform:scale(.997); }
+
+.sheet-cancel{ margin-top:10px; padding:10px; text-align:center; cursor:pointer; font-weight:700; color:var(--primary-text); border-radius:10px; background: rgba(255,255,255,0.03); font-family:var(--font-family); }
+
+.system-message-wrapper { text-align: center; margin: 20px 0; cursor: pointer; }
+.system-message {
+display: inline-flex;
+align-items: center;
+padding: 8px 16px;
+background: rgba(0,0,0,0.2);
+border-radius: 20px;
+font-size: 0.95em;
+font-weight: 500;
+color: var(--secondary-text);
+opacity: 0;
+animation: fadeIn 0.5s ease forwards;
+}
+.system-message-wrapper.no-animate .system-message, .system-message.no-animate { opacity: 1; animation: none; }
+.system-message strong { color: var(--primary-text); margin-right: 5px; }
+.system-message .icon { margin-right: 8px; font-size: 20px; }
+@keyframes fadeIn { to { opacity: 1; } }
+
+body.modal-open { overflow: hidden; touch-action: none; }
+
+.settings-sheet {
+position: fixed;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%) scale(0.95);
+width: 90%;
+max-width: 560px;
+border-radius: 16px;
+background: #1e1e1e;
+box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+z-index: 1001;
+opacity: 0;
+transition: opacity .2s ease, transform .2s cubic-bezier(.2,.9,.2,1);
+pointer-events: none;
+display: flex;
+flex-direction: column;
+}
+.settings-sheet.open {
+opacity: 1;
+transform: translate(-50%, -50%) scale(1);
+pointer-events: auto;
+}
+.settings-header {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 12px 20px;
+border-bottom: 1px solid var(--border-color);
+}
+.settings-header .title { font-size: 1.2rem; font-weight: 700; }
+.settings-header .close-btn { font-size: 28px; cursor: pointer; color: var(--secondary-text); }
+.settings-content { padding: 20px; }
+.settings-preview { margin-bottom: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; transition: box-shadow .4s ease; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; }
+.setting-label { font-size: 1rem; font-weight: 500; }
+.toggle-switch { position: relative; display: inline-block; width: 51px; height: 31px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 27px; width: 27px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: var(--accent-color); }
+input:checked + .slider:before { transform: translateX(20px); }
+.settings-actions { margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px; display: flex; gap: 10px; }
+.settings-btn { flex: 1; padding: 12px; border: none; font-size: 1rem; font-weight: 700; border-radius: 10px; cursor: pointer; }
+.clear-blocked-btn { background-color: rgba(244,67,54,0.1); color: var(--danger); }
+.clear-followed-btn { background-color: rgba(255,152,0,0.1); color: var(--warn); }
+
+.content.notified-glow {
+    animation: pulse-glow-accent 1.5s infinite;
+    border-color: var(--accent-color);
+}
+.content.followed-glow {
+    animation: pulse-glow-success 1.5s infinite;
+    border-color: var(--success);
+}
+.settings-preview.notified-glow {
+    border-radius: 12px;
+}
+@keyframes pulse-glow-accent {
+    0% { box-shadow: 0 0 4px rgba(3, 169, 244, 0.4); }
+    50% { box-shadow: 0 0 14px 4px rgba(3, 169, 244, 0.75); }
+    100% { box-shadow: 0 0 4px rgba(3, 169, 244, 0.4); }
+}
+@keyframes pulse-glow-success {
+    0% { box-shadow: 0 0 4px rgba(76, 175, 80, 0.4); }
+    50% { box-shadow: 0 0 14px 4px rgba(76, 175, 80, 0.75); }
+    100% { box-shadow: 0 0 4px rgba(76, 175, 80, 0.4); }
+}
+
+</style>
+</head>
+<body>
+<div class="container">
+<div id="chat"></div>
+<div id="scrollToBottom" title="Scroll to Bottom" style="position:absolute;right:30px;bottom:30px;width:50px;height:50px;background:#03a9f4;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.3);opacity:0;transform:translateY(20px);transition:opacity .3s,transform .3s;">
+<i class="material-icons">keyboard_arrow_down</i>
+</div>
+</div>
+<div id="contextBackdrop" class="context-backdrop" aria-hidden="true"></div>
+<div id="contextSheet" class="context-sheet" role="dialog" aria-modal="true" aria-hidden="true">
+<div class="sheet-top">
+<img id="sheetAvatar" class="sheet-avatar" src="" alt="avatar">
+<div class="sheet-meta">
+<div id="sheetName" class="sheet-name">Name</div>
+<div id="sheetLoc" class="sheet-loc" style="display:none">(Location)</div>
+</div>
+</div>
+<div id="sheetMessage" class="sheet-message">Message text</div>
+<div class="sheet-actions">
+</div>
+<div id="sheetCancel" class="sheet-cancel" role="button">Cancel</div>
+</div>
+<div id="settingsSheet" class="settings-sheet" role="dialog" aria-modal="true" aria-hidden="true">
+<div class="settings-header">
+<span class="title">Settings</span>
+<i id="settingsCloseBtn" class="material-icons close-btn">close</i>
+</div>
+<div class="settings-content">
+<div class="settings-preview">
+<div id="settingsPreviewContent" class="system-message-wrapper" style="margin:0;"><div class="system-message" style="opacity:1;"><i class="material-icons icon">emoji_events</i><strong>Player</strong> has unlocked an achievement!</div></div>
+</div>
+<div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 8px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color);">
+    <label for="notifyPhraseInput" class="setting-label">Notify Phrase</label>
+    <input type="text" id="notifyPhraseInput" placeholder="e.g. your name, alias" style="width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--primary-text); font-family: var(--font-family); font-size: 1rem;">
+</div>
+<div id="settingsToggles"></div>
+<div class="settings-actions">
+<button id="clearBlockedBtn" class="settings-btn clear-blocked-btn">Unblock All</button>
+<button id="clearFollowedBtn" class="settings-btn clear-followed-btn">Unfollow All</button>
+</div>
+</div>
+</div>
+<script>
+const chatBox = document.getElementById("chat");
+const scrollToBottomBtn = document.getElementById("scrollToBottom");
+const socket = new WebSocket("ws://chat.towerunite.com/global");
+const avatarCache = {};
+const fallbackAvatar = "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/b5/b5bd56c1aa4644a474a2e4972be27ef9e82e517e_full.jpg";
+let blockedUsers = [];
+let followedUsers = [];
+const BLOCKED_USERS_KEY = 'towerUniteBlockedUsers';
+const FOLLOWED_USERS_KEY = 'towerUniteFollowedUsers';
+const messageQueue = [];
+let isProcessingQueue = false;
+const MESSAGE_CACHE_KEY = 'globalChatMessageCache';
+const AVATAR_CACHE_KEY = 'globalChatAvatarCache';
+const MAX_CACHE_SIZE = 100;
+
+const backdrop = document.getElementById('contextBackdrop');
+const sheet = document.getElementById('contextSheet');
+const sheetAvatar = document.getElementById('sheetAvatar');
+const sheetName = document.getElementById('sheetName');
+const sheetLoc = document.getElementById('sheetLoc');
+const sheetMessage = document.getElementById('sheetMessage');
+const sheetActions = document.querySelector('#contextSheet .sheet-actions');
+const settingsSheet = document.getElementById('settingsSheet');
+document.getElementById('sheetCancel').addEventListener('click', closeContextSheet);
+const notificationSound = new Audio("notify.mp3");
+notificationSound.volume = 0.5;
+
+let currentContextTarget = null;
+let currentContextData = null;
+let longPressTimer = null;
+
+const SETTINGS_KEY = 'globalChatSettings';
+const defaultSettings = {
+    showAchievements: true,
+    showAnnouncements: true,
+    showCondoOpenings: true,
+    showTreasureAlerts: true,
+    showGameStarts: true,
+    showPlazaNotifications: true,
+    notifyPhrase: '',
+    cacheMessages: false
+};
+let settings = { ...defaultSettings };
+
+function loadSettings() {
+    const stored = localStorage.getItem(SETTINGS_KEY);
+    if (stored) {
+        settings = { ...defaultSettings, ...JSON.parse(stored) };
+    }
+}
+function saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+const messageTypes = {
+    plaza: { setting: 'showPlazaNotifications', label: 'Show Plaza Notifications', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">festival</i>A special character is visiting the Plaza.</div>' },
+    achievement: { setting: 'showAchievements', label: 'Show Achievements', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">emoji_events</i><strong>Player</strong> has unlocked an achievement!</div>' },
+    announcement: { setting: 'showAnnouncements', label: 'Show Announcements', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">campaign</i>This is an important announcement.</div>' },
+    condo: { setting: 'showCondoOpenings', label: 'Show Condo Events', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">villa</i><strong>Player</strong> entered their condo.</div>' },
+    treasure: { setting: 'showTreasureAlerts', label: 'Show Treasure Alerts', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">savings</i>Treasure has washed up on the beach!</div>' },
+    game: { setting: 'showGameStarts', label: 'Show Game Events', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">sports_score</i><strong>Player</strong> started a game of Accelerate.</div>' }
+};
+
+const generalSettings = {
+    cacheMessages: { label: 'Cache Messages in Browser', preview: '<div class="system-message" style="opacity:1;"><i class="material-icons icon">save</i>Messages will be saved when you refresh.</div>' }
+};
+
+function loadAvatarCache() {
+    const stored = localStorage.getItem(AVATAR_CACHE_KEY);
+    if (stored) {
+        try {
+            const parsed = JSON.parse(stored);
+            Object.assign(avatarCache, parsed);
+        } catch(e) {
+            console.error("Failed to load avatar cache", e);
+            localStorage.removeItem(AVATAR_CACHE_KEY);
+        }
+    }
+}
+
+function saveAvatarToCache(steamId, url) {
+    if (!steamId || !url) return;
+    avatarCache[steamId] = url;
+    try {
+        localStorage.setItem(AVATAR_CACHE_KEY, JSON.stringify(avatarCache));
+    } catch(e) {
+        console.error("Failed to save to avatar cache", e);
+    }
+}
+
+function clearAvatarCache() {
+    localStorage.removeItem(AVATAR_CACHE_KEY);
+    for (const key in avatarCache) {
+        delete avatarCache[key];
+    }
+}
+
+function loadBlockedUsers(){ const stored = localStorage.getItem(BLOCKED_USERS_KEY); if(stored) blockedUsers = JSON.parse(stored); }
+function saveBlockedUsers(){ localStorage.setItem(BLOCKED_USERS_KEY, JSON.stringify(blockedUsers)); }
+function loadFollowedUsers(){ const stored = localStorage.getItem(FOLLOWED_USERS_KEY); if(stored) followedUsers = JSON.parse(stored); }
+function saveFollowedUsers(){ localStorage.setItem(FOLLOWED_USERS_KEY, JSON.stringify(followedUsers)); }
+
+
+function blockUser(steamId, steamName){
+    if(!blockedUsers.includes(steamId)){
+        if(confirm(`Are you sure you want to block ${steamName}? You will no longer see their messages.`)){
+            blockedUsers.push(steamId);
+            saveBlockedUsers();
+            document.querySelectorAll(`.msg[data-steam-id="${steamId}"]`).forEach(msg => removeMessageElement(msg));
+        }
+    }
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchAvatar(steamId) {
+    if (avatarCache[steamId]) return avatarCache[steamId];
+
+    const profileUrl = encodeURIComponent(`https://steamcommunity.com/profiles/${steamId}/?xml=1`);
+    const proxyUrl = `https://api.allorigins.win/get?url=${profileUrl}`;
+    let attempts = 0;
+    const maxRetries = 2;
+
+    while (attempts <= maxRetries) {
+        try {
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+            const data = await res.json();
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(data.contents, "text/xml");
+            const avatarUrl = xml.querySelector("avatarFull")?.textContent;
+
+            if (avatarUrl) {
+                saveAvatarToCache(steamId, avatarUrl);
+                return avatarUrl;
+            } else {
+                 throw new Error("Could not find avatar in XML response.");
+            }
+        } catch (error) {
+            console.warn(`Attempt ${attempts + 1} to fetch avatar for ${steamId} failed:`, error);
+            attempts++;
+            if (attempts <= maxRetries) {
+                console.log(`Retrying in 5 seconds...`);
+                await sleep(5000);
+            }
+        }
+    }
+
+    console.error(`Failed to fetch avatar for ${steamId} after ${maxRetries} retries.`);
+    return fallbackAvatar;
+}
+
+
+function removeMessageElement(element){
+    element.style.transition = 'opacity .3s ease, transform .3s ease, margin .3s ease, height .3s ease, padding .3s ease';
+    element.style.opacity = '0';
+    element.style.transform = 'translateX(-20px)';
+    element.style.margin = '0';
+    element.style.padding = '0';
+    element.style.height = '0';
+    setTimeout(()=>element.remove(),300);
+}
+
+function appendMessage(element, options = { animate: true }){
+    const isScrolledToBottom = chatBox.scrollHeight - chatBox.clientHeight <= chatBox.scrollTop + 50;
+    chatBox.appendChild(element);
+
+    if (options.animate) {
+        requestAnimationFrame(() => {
+            if (element.classList.contains('msg') || element.classList.contains('system-message-wrapper')) {
+                element.classList.add('visible');
+            }
+        });
+    } else {
+        element.classList.add('no-animate');
+    }
+
+    if(isScrolledToBottom) chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+
+function createButton(id, text, classes = [], onClick) {
+    const button = document.createElement('button');
+    button.id = id;
+    button.textContent = text;
+    button.className = 'sheet-action-btn';
+    if(classes.length) button.classList.add(...classes);
+    button.addEventListener('click', onClick);
+    return button;
+}
+
+function openContextSheet(targetEl, data, isSystemMessage = false, messageTypeKey = null){
+    currentContextTarget = targetEl;
+    currentContextData = data;
+
+    sheetActions.innerHTML = '';
+
+    if(isSystemMessage) {
+        sheet.querySelector('.sheet-top').style.display = 'none';
+        const messageClone = targetEl.querySelector('.system-message').cloneNode(true);
+        messageClone.style.opacity = 1;
+        sheetMessage.innerHTML = '';
+        sheetMessage.appendChild(messageClone);
+        sheetMessage.style.textAlign = 'center';
+
+        sheetActions.appendChild(createButton('btnDelete', 'Delete', ['destructive'], () => {
+            if(currentContextTarget) removeMessageElement(currentContextTarget);
+            closeContextSheet();
+        }));
+
+        if(messageTypeKey && messageTypes[messageTypeKey]) {
+            const typeInfo = messageTypes[messageTypeKey];
+            const isEnabled = settings[typeInfo.setting];
+            const btnText = isEnabled ? `Disable ${typeInfo.label.replace('Show ', '')}` : `Enable ${typeInfo.label.replace('Show ', '')}`;
+            const btnClasses = isEnabled ? ['destructive'] : ['success'];
+
+            const toggleBtn = createButton('btnToggleSystemMsg', btnText, btnClasses, () => {
+                settings[typeInfo.setting] = !isEnabled;
+                saveSettings();
+                updateSettingsToggles();
+                closeContextSheet();
+            });
+            sheetActions.appendChild(toggleBtn);
+        }
+
+        sheetActions.appendChild(createButton('btnSettings', 'Settings', [], openSettingsModal));
+
+    } else {
+        sheet.querySelector('.sheet-top').style.display = 'flex';
+        sheetMessage.style.textAlign = 'left';
+        const avatarImg = targetEl.querySelector('.avatar');
+        sheetAvatar.src = avatarImg ? avatarImg.src : fallbackAvatar;
+        sheetAvatar.alt = `${data.steam_name}'s avatar`;
+        sheetName.textContent = data.steam_name || "Unknown";
+        sheetLoc.style.display = (data.location && data.location.toLowerCase() !== "none") ? 'block' : 'none';
+        if(data.location) sheetLoc.textContent = `(${data.location})`;
+        sheetMessage.innerHTML = targetEl.querySelector('.message-text')?.innerHTML || (data.message || "");
+
+        const reportUrl = `https://moderation.towerunite.com/web_report_player.php?sid=${data.steam_id}`;
+        
+        const isFollowed = followedUsers.includes(data.steam_id);
+        const followBtnText = isFollowed ? 'Unfollow User' : 'Follow User';
+        const followBtnClasses = isFollowed ? ['warn'] : ['success'];
+        const followButton = createButton('btnFollow', followBtnText, followBtnClasses, () => {
+            if (isFollowed) {
+                followedUsers = followedUsers.filter(id => id !== data.steam_id);
+                document.querySelectorAll(`.msg[data-steam-id="${data.steam_id}"]`).forEach(msgEl => {
+                    msgEl.querySelector('.name')?.classList.remove('followed-user-name');
+                    msgEl.querySelector('.content.followed-glow')?.classList.remove('followed-glow');
+                });
+            } else {
+                if (!followedUsers.includes(data.steam_id)) {
+                    followedUsers.push(data.steam_id);
+                }
+                document.querySelectorAll(`.msg[data-steam-id="${data.steam_id}"]`).forEach(msgEl => {
+                    msgEl.querySelector('.name')?.classList.add('followed-user-name');
+                });
+            }
+            saveFollowedUsers();
+            closeContextSheet();
+        });
+        sheetActions.appendChild(followButton);
+
+
+        sheetActions.appendChild(createButton('btnDelete', 'Delete for me', ['destructive'], () => {
+            if(currentContextTarget) removeMessageElement(currentContextTarget);
+            closeContextSheet();
+        }));
+        sheetActions.appendChild(createButton('btnBlock', 'Block User', ['warn'], () => {
+            blockUser(data.steam_id, data.steam_name);
+            closeContextSheet();
+        }));
+        sheetActions.appendChild(createButton('btnReport', 'Report User', [], () => {
+            window.open(reportUrl, '_blank');
+            closeContextSheet();
+        }));
+        sheetActions.appendChild(createButton('btnSettings', 'Settings', [], openSettingsModal));
+    }
+
+    backdrop.classList.add('open');
+    sheet.classList.add('open');
+    document.body.classList.add('modal-open');
+    backdrop.addEventListener('click', closeContextSheet, { once: true });
+    document.addEventListener('keydown', escKeyHandler);
+}
+
+function closeContextSheet(){
+    backdrop.classList.remove('open');
+    sheet.classList.remove('open');
+    if(!settingsSheet.classList.contains('open')) {
+        document.body.classList.remove('modal-open');
+    }
+    document.removeEventListener('keydown', escKeyHandler);
+    currentContextTarget = null;
+    currentContextData = null;
+}
+
+function escKeyHandler(e){ if(e.key === 'Escape') { closeContextSheet(); closeSettingsModal(); } }
+
+function attachContextHandlers(msgEl, data, isSystem = false, typeKey = null){
+    if (isSystem) {
+        const messageText = msgEl.textContent.trim();
+        const isInfoSystemMessage = messageText.includes("Project is not affiliated") || messageText.includes("Connected to Global Chat");
+
+        if (isInfoSystemMessage) {
+            const clickHandler = (ev) => {
+                ev.preventDefault();
+                openSettingsModal();
+            };
+            msgEl.addEventListener('click', clickHandler);
+            msgEl.addEventListener('contextmenu', clickHandler);
+            msgEl.tabIndex = 0;
+            return;
+        }
+
+        msgEl.addEventListener('contextmenu', (ev) => { ev.preventDefault(); openContextSheet(msgEl, data, isSystem, typeKey); });
+        msgEl.addEventListener('click', (ev) => { openContextSheet(msgEl, data, isSystem, typeKey); });
+
+        msgEl.addEventListener('touchstart', (ev) => {
+            longPressTimer = setTimeout(() => { openContextSheet(msgEl, data, isSystem, typeKey); longPressTimer = null; }, 520);
+        }, { passive: true });
+        msgEl.addEventListener('touchmove', () => { if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; } }, { passive: true });
+        ['touchend','touchcancel'].forEach(evtName => {
+            msgEl.addEventListener(evtName, () => { if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; } }, { passive: true });
+        });
+
+        msgEl.addEventListener('keydown', (ev) => {
+            if((ev.shiftKey && ev.key === 'F10') || ev.key === 'ContextMenu'){ ev.preventDefault(); openContextSheet(msgEl, data, isSystem, typeKey); }
+        });
+        msgEl.tabIndex = 0;
+
+    } else {
+        msgEl.addEventListener('contextmenu', (ev) => { ev.preventDefault(); openContextSheet(msgEl, data, isSystem, typeKey); });
+        msgEl.addEventListener('click', (ev) => { openContextSheet(msgEl, data, isSystem, typeKey); });
+
+        msgEl.addEventListener('touchstart', (ev) => {
+            longPressTimer = setTimeout(() => { openContextSheet(msgEl, data, isSystem, typeKey); longPressTimer = null; }, 520);
+        }, { passive: true });
+        msgEl.addEventListener('touchmove', () => { if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; } }, { passive: true });
+        ['touchend','touchcancel'].forEach(evtName => {
+            msgEl.addEventListener(evtName, () => { if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; } }, { passive: true });
+        });
+
+        msgEl.addEventListener('keydown', (ev) => {
+            if((ev.shiftKey && ev.key === 'F10') || ev.key === 'ContextMenu'){ ev.preventDefault(); openContextSheet(msgEl, data, isSystem, typeKey); }
+        });
+        msgEl.tabIndex = 0;
+    }
+}
+
+const notifyPhraseInput = document.getElementById('notifyPhraseInput');
+const settingsPreview = document.querySelector('.settings-preview');
+const settingsPreviewContent = document.getElementById('settingsPreviewContent');
+
+function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+        console.log("This browser does not support desktop notifications.");
+        return;
+    }
+
+    if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                console.log('Notification permission granted.');
+                new Notification('Notifications Enabled!', {
+                    body: 'You will now receive notifications for followed users and your notify phrases.',
+                    icon: fallbackAvatar
+                });
+            }
+        });
+    }
+}
+
+function updateNotifyPreview(phrase) {
+    if (phrase) {
+        settingsPreview.classList.add('notified-glow');
+        const escapedPhrase = phrase.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        settingsPreviewContent.innerHTML = `<div class="msg visible" style="background: transparent; padding: 0; margin: 0;"><div class="content notified-glow" style="width:100%"><div class="name-line"><div><a class="name">Player</a></div></div><div class="message-text">Seperate with a comma to add more than one, <strong>${escapedPhrase}!</strong></div></div></div>`;
+    } else {
+        settingsPreview.classList.remove('notified-glow');
+        settingsPreviewContent.innerHTML = messageTypes.achievement.preview;
+    }
+}
+
+notifyPhraseInput.addEventListener('input', () => {
+    const phrase = notifyPhraseInput.value;
+    settings.notifyPhrase = phrase;
+    saveSettings();
+    updateNotifyPreview(phrase);
+});
+
+notifyPhraseInput.addEventListener('focus', requestNotificationPermission, { once: true });
+
+
+function openSettingsModal() {
+    closeContextSheet();
+    updateSettingsToggles();
+    notifyPhraseInput.value = settings.notifyPhrase || '';
+    updateNotifyPreview(settings.notifyPhrase);
+    backdrop.classList.add('open');
+    settingsSheet.classList.add('open');
+    document.body.classList.add('modal-open');
+    backdrop.addEventListener('click', closeSettingsModal, { once: true });
+    document.addEventListener('keydown', escKeyHandler);
+}
+
+function closeSettingsModal() {
+    backdrop.classList.remove('open');
+    settingsSheet.classList.remove('open');
+    if(!sheet.classList.contains('open')) {
+        document.body.classList.remove('modal-open');
+    }
+    settingsPreview.classList.remove('notified-glow');
+    document.removeEventListener('keydown', escKeyHandler);
+}
+document.getElementById('settingsCloseBtn').addEventListener('click', closeSettingsModal);
+
+function updateSettingsToggles() {
+    const container = document.getElementById('settingsToggles');
+    container.innerHTML = '';
+
+    Object.entries(messageTypes).forEach(([key, info]) => {
+        const row = document.createElement('div');
+        row.className = 'setting-row';
+        row.innerHTML = `
+            <span class="setting-label">${info.label}</span>
+            <label class="toggle-switch">
+                <input type="checkbox" data-setting-key="${info.setting}" ${settings[info.setting] ? 'checked' : ''}>
+                <span class="slider"></span>
+            </label>`;
+        const toggle = row.querySelector('input');
+        toggle.addEventListener('change', () => {
+            settings[info.setting] = toggle.checked;
+            saveSettings();
+            if (!settings.notifyPhrase) { settingsPreviewContent.innerHTML = info.preview; }
+        });
+        row.addEventListener('mouseenter', () => {
+            if (!settings.notifyPhrase) { settingsPreviewContent.innerHTML = info.preview; }
+        });
+        container.appendChild(row);
+    });
+
+    container.appendChild(document.createElement('hr'));
+
+    Object.entries(generalSettings).forEach(([key, info]) => {
+        const row = document.createElement('div');
+        row.className = 'setting-row';
+        row.innerHTML = `
+            <span class="setting-label">${info.label}</span>
+            <label class="toggle-switch">
+                <input type="checkbox" data-setting-key="${key}" ${settings[key] ? 'checked' : ''}>
+                <span class="slider"></span>
+            </label>`;
+        const toggle = row.querySelector('input');
+        toggle.addEventListener('change', () => {
+            settings[key] = toggle.checked;
+            saveSettings();
+            if (toggle.checked) {
+                cacheExistingMessages();
+            } else {
+                clearMessageCache();
+                chatBox.innerHTML = '';
+                appendSystemMessage('Message and avatar cache cleared.', 'delete_sweep');
+            }
+            if (!settings.notifyPhrase) { settingsPreviewContent.innerHTML = info.preview; }
+        });
+        row.addEventListener('mouseenter', () => {
+            if (!settings.notifyPhrase) { settingsPreviewContent.innerHTML = info.preview; }
+        });
+        container.appendChild(row);
+    });
+}
+
+
+document.getElementById('clearBlockedBtn').addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear all blocked users? This cannot be undone.')) {
+        blockedUsers = [];
+        saveBlockedUsers();
+        alert('Blocked users list has been cleared.');
+    }
+});
+document.getElementById('clearFollowedBtn').addEventListener('click', () => {
+    if (confirm('Are you sure you want to unfollow all users?')) {
+        followedUsers = [];
+        saveFollowedUsers();
+        document.querySelectorAll('.content.followed-glow').forEach(el => el.classList.remove('followed-glow'));
+        document.querySelectorAll('.name.followed-user-name').forEach(el => el.classList.remove('followed-user-name'));
+        alert('You have unfollowed all users.');
+    }
+});
+
+
+function saveMessageToCache(data) {
+    if (!settings.cacheMessages) return;
+    try {
+        const cacheRaw = localStorage.getItem(MESSAGE_CACHE_KEY);
+        let cache = cacheRaw ? JSON.parse(cacheRaw) : [];
+        cache.push(data);
+        if (cache.length > MAX_CACHE_SIZE) {
+            cache = cache.slice(cache.length - MAX_CACHE_SIZE);
+        }
+        localStorage.setItem(MESSAGE_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+        console.error("Failed to save message to cache:", e);
+    }
+}
+
+async function loadMessagesFromCache() {
+    if (!settings.cacheMessages) return;
+    try {
+        const cacheRaw = localStorage.getItem(MESSAGE_CACHE_KEY);
+        if (cacheRaw) {
+            const cache = JSON.parse(cacheRaw);
+            for (const data of cache) {
+                await renderMessage(data, { animate: false });
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load messages from cache:", e);
+        clearMessageCache();
+    }
+}
+
+function clearMessageCache() {
+    localStorage.removeItem(MESSAGE_CACHE_KEY);
+    clearAvatarCache();
+}
+
+function cacheExistingMessages() {
+    const existingMessages = chatBox.querySelectorAll('.msg, .system-message-wrapper');
+    const messagesToCache = [];
+    existingMessages.forEach(msgEl => {
+        const data = {};
+        if (msgEl.classList.contains('msg')) {
+            data.steam_id = msgEl.dataset.steamId;
+            data.steam_name = msgEl.querySelector('.name').textContent;
+            const locEl = msgEl.querySelector('.loc');
+            data.location = locEl ? locEl.textContent.slice(1, -1) : 'none';
+            data.message = msgEl.querySelector('.message-text').textContent;
+            data.timestamp = msgEl.querySelector('.timestamp').textContent;
+        } else {
+            return;
+        }
+        messagesToCache.push(data);
+    });
+
+    if (messagesToCache.length > 0) {
+        try {
+            localStorage.setItem(MESSAGE_CACHE_KEY, JSON.stringify(messagesToCache));
+            appendSystemMessage('Existing messages cached.', 'save');
+        } catch (e) {
+            console.error("Failed to cache existing messages:", e);
+        }
+    }
+}
+
+
+async function renderMessage(data, options = { animate: true }) {
+    const message = (data.message || "").trim();
+    if (blockedUsers.includes(data.steam_id)) return;
+
+    const lowerCaseMessage = message.toLowerCase();
+    const lowerCaseLocation = data.location?.toLowerCase();
+    let isSystemMessage = false;
+    let messageTypeKey = null;
+    let iconName = '';
+
+    if (lowerCaseLocation === 'plaza' && data.steam_name?.toLowerCase().startsWith("none")) { messageTypeKey = 'plaza'; iconName = 'festival'; }
+    else if (lowerCaseMessage.includes("has unlocked")) { messageTypeKey = 'achievement'; iconName = 'emoji_events'; }
+    else if (data.steam_name?.toLowerCase().startsWith("none.")) { messageTypeKey = 'announcement'; iconName = 'campaign'; }
+    else if (lowerCaseMessage.startsWith("entered their")) { messageTypeKey = 'condo'; iconName = 'villa'; }
+    else if (lowerCaseMessage.startsWith("treasure has washed up")) { messageTypeKey = 'treasure'; iconName = 'savings'; }
+    else if (lowerCaseMessage.startsWith("started a game of")) {
+        messageTypeKey = 'game'; iconName = 'sports_score';
+        if (lowerCaseMessage.includes("minigolf")) iconName = 'golf_course';
+        else if (lowerCaseMessage.includes("workshop")) iconName = 'build';
+        else if (lowerCaseMessage.includes("virus")) iconName = 'sensor_occupied';
+        else if (lowerCaseMessage.includes("little")) iconName = 'swords';
+        else if (lowerCaseMessage.includes("ball")) iconName = 'panorama_photosphere';
+        else if (lowerCaseMessage.includes("zombie")) iconName = 'crisis_alert';
+        else if (lowerCaseMessage.includes("accelerate")) iconName = 'sports_score';
+        else if (lowerCaseMessage.includes("sdnl")) iconName = 'live_tv';
+        else iconName = 'sports_esports';
+    }
+
+    if (messageTypeKey) {
+        isSystemMessage = true;
+        const typeInfo = messageTypes[messageTypeKey];
+        if (typeInfo && !settings[typeInfo.setting]) return;
+    }
+
+    if (isSystemMessage) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "system-message-wrapper";
+        let safeName = (data.steam_name && data.steam_name.toLowerCase() !== "none") ? `<strong>${data.steam_name}</strong> ` : "";
+        let messageContent = `<div class="system-message"><i class="material-icons icon">${iconName}</i>${(messageTypeKey === 'announcement' || messageTypeKey === 'plaza') ? '' : safeName}${message}</div>`;
+        wrapper.innerHTML = messageContent;
+        appendMessage(wrapper, options);
+        attachContextHandlers(wrapper, data, true, messageTypeKey);
+        return;
+    }
+     
+    const isFollowed = followedUsers.includes(data.steam_id);
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.dataset.steamId = data.steam_id;
+
+    const avatarUrl = await fetchAvatar(data.steam_id);
+
+    await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = avatarUrl;
+    });
+
+    const profileUrl = `https://steamcommunity.com/profiles/${data.steam_id}/`;
+    const locationSpan = data.location && data.location.toLowerCase() !== 'none' ? `<span class="loc">(${data.location})</span>` : '';
+    const timestamp = `<span class="timestamp">${data.timestamp || formatTimestamp()}</span>`;
+    const followedNameClass = isFollowed ? 'followed-user-name' : '';
+
+    div.innerHTML = `
+        <a href="${profileUrl}" target="_blank" class="avatar-link" aria-hidden="true">
+            <img class="avatar" src="${avatarUrl}" alt="${data.steam_name}'s avatar">
+        </a>
+        <div class="content">
+            <div class="name-line">
+                <div><a href="${profileUrl}" target="_blank" class="name ${followedNameClass}">${data.steam_name}</a>${locationSpan}</div>
+                ${timestamp}
+            </div>
+            <div class="message-text">${message.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+        </div>`;
+
+    appendMessage(div, options);
+
+    const contentDiv = div.querySelector('.content');
+    let shouldNotify = false;
+
+    const notifyPhrasesRaw = settings.notifyPhrase || '';
+    if (notifyPhrasesRaw) {
+        const phrases = notifyPhrasesRaw.split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
+        if (phrases.some(phrase => message.toLowerCase().includes(phrase))) {
+            if (contentDiv && options.animate) {
+                contentDiv.classList.add('notified-glow');
+                setTimeout(() => {
+                    contentDiv.classList.remove('notified-glow');
+                }, 4000);
+            }
+            shouldNotify = true;
+        }
+    }
+    
+    if (isFollowed) {
+        if (contentDiv && options.animate) {
+            contentDiv.classList.add('followed-glow');
+            setTimeout(() => {
+                contentDiv.classList.remove('followed-glow');
+            }, 4000); 
+        }
+        shouldNotify = true;
+    }
+
+    if (options.animate && shouldNotify) {
+        const isFocused = document.hasFocus();
+        
+        if (isFocused) {
+            notificationSound.play().catch(e => console.warn("Audio playback failed.", e));
+        } else if ("Notification" in window && Notification.permission === 'granted') {
+            const cleanMessage = message.replace(/<[^>]*>?/gm, '');
+            new Notification(data.steam_name || "Global Chat Notification", {
+                body: cleanMessage,
+                icon: avatarUrl,
+                tag: data.steam_id + data.timestamp
+            });
+        }
+    }
+
+    attachContextHandlers(div, data);
+}
+
+socket.onopen = () => { console.log("✅ Connected to chat server."); appendSystemMessage("Connected to Global Chat", "public", { animate: true, returnElement: true }); };
+socket.onmessage = (event) => {
+    messageQueue.push(event);
+    processQueue();
+};
+
+function formatTimestamp(){ const now = new Date(); return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+
+async function processQueue() {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    while (messageQueue.length > 0) {
+        const event = messageQueue.shift();
+        try {
+            const data = JSON.parse(event.data);
+            data.timestamp = formatTimestamp();
+            await renderMessage(data, { animate: true });
+            saveMessageToCache(data);
+        } catch (e) {
+            console.error("Bad message:", event.data, e);
+        }
+        await sleep(50); 
+    }
+
+    isProcessingQueue = false;
+}
+
+
+chatBox.addEventListener('scroll', () => {
+    const threshold = 200;
+    if(chatBox.scrollHeight - chatBox.clientHeight - chatBox.scrollTop > threshold){
+        scrollToBottomBtn.style.opacity = '1'; scrollToBottomBtn.style.transform = 'translateY(0)';
+    } else {
+        scrollToBottomBtn.style.opacity = '0'; scrollToBottomBtn.style.transform = 'translateY(20px)';
+    }
+});
+scrollToBottomBtn.addEventListener('click', () => chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' }));
+
+function appendSystemMessage(message, icon, options = { animate: true, returnElement: false }){
+    const wrapper = document.createElement("div");
+    wrapper.className = "system-message-wrapper";
+    let content = '';
+    if(icon) content += `<i class="material-icons icon">${icon}</i>`;
+    content += message;
+    const systemMsgDiv = document.createElement('div');
+    systemMsgDiv.className = 'system-message';
+    systemMsgDiv.innerHTML = content;
+    if (options.animate) {
+        systemMsgDiv.style.opacity = '1';
+    } else {
+        systemMsgDiv.classList.add('no-animate');
+    }
+    wrapper.appendChild(systemMsgDiv);
+    appendMessage(wrapper, options);
+    if(options.returnElement) return wrapper;
+}
+
+function initializeChat() {
+    loadSettings();
+    loadAvatarCache();
+    loadBlockedUsers();
+    loadFollowedUsers();
+    
+    const disclaimerMsg = "<strong>Disclaimer:</strong> This project is not affiliated with PixelTail Games.";
+    const disclaimerEl = appendSystemMessage(disclaimerMsg, "info", { animate: !settings.cacheMessages, returnElement: true });
+    attachContextHandlers(disclaimerEl, { message: disclaimerMsg }, true);
+
+    loadMessagesFromCache();
+}
+
+
+window.addEventListener('beforeunload', () => { try { closeContextSheet(); closeSettingsModal(); } catch(e) {} });
+
+initializeChat();
+
+</script>
+</body>
+</html>
